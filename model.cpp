@@ -18,6 +18,8 @@ model::model()
 	inv_obj_coord_trans[2].z = 1;
 
 	inv_obj_coord_trans[3].p = 1;
+
+	color = RGB(255, 255, 255);
 }
 
 

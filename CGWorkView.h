@@ -88,13 +88,19 @@ protected:
 	virtual LRESULT OnMouseMovement(WPARAM wparam, LPARAM lparam);
 
 	mat4	m_tarnsform;
+	mat4 m_screen_space_trans;
 	int m_mouse_xpos;
 	int m_mouse_ypos;
+	bool m_object_space_trans;
 	HGLRC    m_hRC;			// holds the Rendering Context
+	HDC		 m_hDC;
 	CDC*     m_pDC;			// holds the Device Context
 	int m_WindowWidth;		// hold the windows width
 	int m_WindowHeight;		// hold the windows height
 	double m_AspectRatio;		// hold the fixed Aspect Ration
+	double m_mouse_sensetivity;
+	COLORREF *m_screen;
+	HBITMAP m_map;
 
 // Generated message map functions
 protected:
@@ -125,6 +131,10 @@ protected:
 	afx_msg void OnLightShadingGouraud();
 	afx_msg void OnUpdateLightShadingGouraud(CCmdUI* pCmdUI);
 	afx_msg void OnLightConstants();
+	afx_msg void OnActionToggleView();
+	afx_msg void OnUpdateActionToggleView(CCmdUI* pCmdUI);
+	afx_msg void OnActionResetView();
+	afx_msg void OnOptionMouseSensetivity();
 	//}}AFX_MSG
 	DECLARE_MESSAGE_MAP()
 };

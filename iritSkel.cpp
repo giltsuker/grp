@@ -204,7 +204,7 @@ bool CGSkelStoreData(IPObjectStruct *PObj)
 
 	if (CGSkelGetObjectColor(PObj, RGB))
 	{
-		/* color code */
+		models.back().color = CGSkelGetObjectColor(PObj, RGB);
 	}
 	if (CGSkelGetObjectTransp(PObj, &Transp))
 	{
@@ -270,15 +270,6 @@ bool CGSkelStoreData(IPObjectStruct *PObj)
 				if (temp_vert.x > max_vec.x || models.back().polygons.front().points.size() == 0) max_vec.x = temp_vert.x;
 				if (temp_vert.y > max_vec.y || models.back().polygons.front().points.size() == 0) max_vec.y = temp_vert.y;
 				if (temp_vert.z > max_vec.z || models.back().polygons.front().points.size() == 0) max_vec.z = temp_vert.z;
-				
-				//if (models.back().polygons.back().points.size() != 0){
-				//	cur_line = line(prev_temp_vert, temp_vert);
-				//	if (lines[cur_line] == 0){
-				//		models.back().points_list.push_back(cur_line);
-				//		lines[cur_line]++;
-				//	}
-				//}
-				//else
 
 				models.back().polygons[poly_cnt].points.push_back(temp_vert); // create an additional vertex
 

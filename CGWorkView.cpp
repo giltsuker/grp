@@ -21,6 +21,7 @@ static char THIS_FILE[] = __FILE__;
 
 #include "PngWrapper.h"
 #include "iritSkel.h"
+#include "MouseSensetiveDialog.h"
 #include "mat4.h"
 #include <math.h>
 #include "line.h"
@@ -35,13 +36,7 @@ static char THIS_FILE[] = __FILE__;
 
 #define IN_RANGE(x, y) ((1 <= x) && (x < (m_WindowHeight - 1)) && (1 <= y) && (y < (m_WindowWidth - 1)))
 
-mat4 screen_space_trans;
 
-mat4 spin_trans;
-mat4 scale_trans;
-mat4 translate_trans;
-
-int mouse_message_cnt = 0;
 /////////////////////////////////////////////////////////////////////////////
 // CCGWorkView
 
@@ -66,6 +61,7 @@ BEGIN_MESSAGE_MAP(CCGWorkView, CView)
 	ON_UPDATE_COMMAND_UI(ID_ACTION_SCALE, OnUpdateActionScale)
 	ON_COMMAND(ID_ACTION_TRANSLATE, OnActionTranslate)
 	ON_UPDATE_COMMAND_UI(ID_ACTION_TRANSLATE, OnUpdateActionTranslate)
+	ON_COMMAND(ID_ACTION_RESETVIEW, OnActionResetView)
 	ON_COMMAND(ID_AXIS_X, OnAxisX)
 	ON_UPDATE_COMMAND_UI(ID_AXIS_X, OnUpdateAxisX)
 	ON_COMMAND(ID_AXIS_Y, OnAxisY)
@@ -77,6 +73,9 @@ BEGIN_MESSAGE_MAP(CCGWorkView, CView)
 	ON_COMMAND(ID_LIGHT_SHADING_GOURAUD, OnLightShadingGouraud)
 	ON_UPDATE_COMMAND_UI(ID_LIGHT_SHADING_GOURAUD, OnUpdateLightShadingGouraud)
 	ON_COMMAND(ID_LIGHT_CONSTANTS, OnLightConstants)
+	ON_COMMAND(ID_BUTTON_TRANS_TOGGLE, OnActionToggleView)
+	ON_COMMAND(ID_OPTIONS_MOUSESENSITIVITY, OnOptionMouseSensetivity)
+	ON_UPDATE_COMMAND_UI(ID_BUTTON_TRANS_TOGGLE, OnUpdateActionToggleView)
 	//}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
@@ -98,16 +97,16 @@ CCGWorkView::CCGWorkView()
 	m_nAxis = ID_AXIS_X;
 	m_nAction = ID_ACTION_ROTATE;
 	m_nView = ID_VIEW_ORTHOGRAPHIC;	
+	m_screen = NULL;
+
+	m_object_space_trans = false;
+	m_mouse_sensetivity = 1;
+
 	m_bIsPerspective = false;
 	m_tarnsform[0][0] = 1;
 	m_tarnsform[1][1] = 1;
 	m_tarnsform[2][2] = 1;
 	m_tarnsform[3][3] = 1;
-
-	spin_trans[0][0] = 1;
-	spin_trans[1][1] = 1;
-	spin_trans[2][2] = 1;
-	spin_trans[3][3] = 1;
 
 	color_wireframe = RGB(255, 255, 255);
 
@@ -185,6 +184,13 @@ BOOL CCGWorkView::InitializeCGWork()
 {
 	m_pDC = new CClientDC(this);
 
+	m_hDC = CreateCompatibleDC(m_pDC->GetSafeHdc());
+
+	if (NULL == m_hDC) { // failure to get DC
+		::AfxMessageBox(CString("Couldn't get a valid DC."));
+		return FALSE;
+	}
+
 	if ( NULL == m_pDC ) { // failure to get DC
 		::AfxMessageBox(CString("Couldn't get a valid DC."));
 		return FALSE;
@@ -253,6 +259,9 @@ void CCGWorkView::OnDraw(CDC* pDC)
 	CCGWorkDoc* pDoc = GetDocument();
 	ASSERT_VALID(pDoc);
 
+	delete m_screen;
+	m_screen = (COLORREF*)calloc(m_WindowWidth * m_WindowHeight, sizeof(COLORREF));
+
 	mat4 screen_space_scale;
 	mat4 screen_space_translate;
 
@@ -273,7 +282,7 @@ void CCGWorkView::OnDraw(CDC* pDC)
 	screen_space_translate[2][2] = 1;
 	screen_space_translate[3][3] = 1;
 
-	screen_space_trans = screen_space_scale * screen_space_translate;
+	m_screen_space_trans = screen_space_scale * screen_space_translate;
 
 	RenderScene();
 
@@ -288,7 +297,13 @@ void CCGWorkView::OnDraw(CDC* pDC)
 void CCGWorkView::OnDestroy() 
 {
 	CView::OnDestroy();
+	if (m_screen){
+		delete m_screen;
+	}
 
+	if (m_hDC){
+		DeleteDC(m_hDC);
+	}
 	// delete the DC
 	if ( m_pDC ) {
 		delete m_pDC;
@@ -303,27 +318,28 @@ bool CCGWorkView::InRange(int x, int y, int width, int height){
 	return (0 <= x && x < height && 0 <= y && y < width);
 };
 
+bool past_pressed;
 LRESULT CCGWorkView::OnMouseMovement(WPARAM wparam, LPARAM lparam){
 	int xPos = GET_X_LPARAM(lparam);
 	int yPos = GET_Y_LPARAM(lparam);
 
-	if (wparam == MK_LBUTTON)
+	if (wparam == MK_LBUTTON && past_pressed)
 	{
 		mat4 temp_transform;
 
 		// x mouse movement params
-		int diff_x = xPos - m_mouse_xpos;
+		double diff_x = m_mouse_sensetivity * (xPos - m_mouse_xpos);
 
-		double teta_x = 20*asin((double)diff_x / m_WindowWidth);
+		double teta_x = 10 * asin((double)diff_x / m_WindowWidth);
 
 		double sinx = sin(teta_x);
 		
 		double cosx = cos(teta_x); // sin(x) ~= x movements are very small
 
 		// x mouse movement params
-		int diff_y = yPos - m_mouse_ypos;
+		double diff_y = m_mouse_sensetivity * (yPos - m_mouse_ypos);
 		
-		double teta_y = asin((double)diff_y / m_WindowHeight);  //TODO scales...
+		double teta_y = 10 * asin((double)diff_y / m_WindowHeight);  //TODO scales...
 		double siny = sin(teta_y);
 		
 		double cosy = cos(teta_y); // sin(y) ~= y movements are very small
@@ -399,18 +415,29 @@ LRESULT CCGWorkView::OnMouseMovement(WPARAM wparam, LPARAM lparam){
 		else if (m_nAction == ID_ACTION_SCALE){
 			int x = 1;
 		}
-		//switch ()
 
-		spin_trans = temp_transform;
-		//inv_spin_trans = inv_temp_transform;
+		m_tarnsform = temp_transform;
 
-		m_tarnsform = m_tarnsform * temp_transform;
+		for (unsigned int m = 0; m < models.size(); m++){
+			if (m_object_space_trans)
+				models[m].obj_coord_trans = m_tarnsform * models[m].obj_coord_trans;
+			else
+				models[m].obj_coord_trans = models[m].obj_coord_trans * m_tarnsform;
+		}
+
 		RenderScene();
-	}
-	m_mouse_xpos = xPos;
-	m_mouse_ypos = yPos;
 
-	mouse_message_cnt++;
+		m_mouse_xpos = xPos;
+		m_mouse_ypos = yPos;
+	}
+	else if (wparam == MK_LBUTTON){
+		past_pressed = true;
+		m_mouse_xpos = xPos;
+		m_mouse_ypos = yPos;
+	}
+	else{
+		past_pressed = false;
+	}
 
 	return 0;
 };
@@ -544,33 +571,34 @@ void CCGWorkView::DrawLine(COLORREF *arr, vec4 &p1, vec4 &p2, COLORREF color){
 
 void CCGWorkView::RenderScene() {
 	
-	COLORREF *screen = (COLORREF*)calloc(m_WindowWidth * m_WindowHeight, sizeof(COLORREF));
-
+	COLORREF m_background_color = RGB(255, 255, 255);
+	std::fill_n(m_screen, m_WindowWidth * m_WindowHeight, m_background_color); //TODO background color select
 	vec4 p1, p2;
 	line cur_line;
 	polygon cur_polygon;
 	mat4 cur_transform;
 	for (unsigned int m = 0; m < models.size(); m++){
-		models[m].obj_coord_trans = spin_trans * models[m].obj_coord_trans;
-		
-		cur_transform = models[m].obj_coord_trans * models[m].view_space_trans * screen_space_trans;
+		cur_transform = models[m].obj_coord_trans * models[m].view_space_trans * m_screen_space_trans;
 		for (unsigned int pnt = 0; pnt < models[m].points_list.size(); pnt++){
 			p1 = models[m].points_list[pnt].p_a * cur_transform;
 			p2 = models[m].points_list[pnt].p_b * cur_transform;
-			DrawLine(screen, p1, p2, color_wireframe);
+			if (models[m].color == m_background_color)
+				DrawLine(m_screen, p1, p2, models[m].color ^ 0x00ffffff); //inverse the color of the object if it is the same as the screen
+			else
+				DrawLine(m_screen, p1, p2, models[m].color);
 		}
 	}
 
 	// Creating temp bitmap
-	HBITMAP map = CreateBitmap(m_WindowWidth,		 // width
+	m_map = CreateBitmap(m_WindowWidth,		 // width
 		m_WindowHeight,		 // height
 		1,			 // Color Planes, unfortanutelly don't know what is it actually. Let it be 1
 		8 * 4,		 // Size of memory for one pixel in bits (in win32 4 bytes = 4*8 bits)
-		(void*)screen); // pointer to array
-	// Temp HDC to copy picture
+		(void*)m_screen); // pointer to array
 
-	HDC src = CreateCompatibleDC(m_pDC->GetSafeHdc()); // hdc - Device context for window
-	SelectObject(src, map); // Inserting picture into our temp HDC
+	
+	//HDC src = CreateCompatibleDC(m_pDC->GetSafeHdc()); // hdc - Device context for window
+	SelectObject(m_hDC, m_map); // Inserting picture into our temp HDC
 
 	// Copy image from temp HDC to window
 	BitBlt(m_pDC->GetSafeHdc(), // Destination
@@ -578,13 +606,13 @@ void CCGWorkView::RenderScene() {
 		0,  // y - upper-left corner of place, where we'd like to copy
 		m_WindowWidth, // width of the region
 		m_WindowHeight, // height
-		src, // source
+		m_hDC, // source
 		0,   // x and
 		0,   // y of upper left corner  of part of the source, from where we'd like to copy
 		SRCCOPY); // Defined DWORD to juct copy pixels. Watch more on msdn;
 
-	DeleteDC(src);
-	delete screen;
+	DeleteObject(m_map);
+
 	return;
 }
 
@@ -642,7 +670,12 @@ void CCGWorkView::OnUpdateViewPerspective(CCmdUI* pCmdUI)
 }
 
 
+void CCGWorkView::OnOptionMouseSensetivity(){
+	MouseSensetiveDialog dlg;
+	dlg.DoModal();
 
+	m_mouse_sensetivity = dlg.m_mouse_sensetivity;
+}
 
 // ACTION HANDLERS ///////////////////////////////////////////
 
@@ -676,8 +709,35 @@ void CCGWorkView::OnUpdateActionScale(CCmdUI* pCmdUI)
 	pCmdUI->SetCheck(m_nAction == ID_ACTION_SCALE);
 }
 
+void CCGWorkView::OnActionResetView()
+{
+	mat4 reset_transform;
+	reset_transform[0][0] = 1;
+	reset_transform[1][1] = 1;
+	reset_transform[2][2] = 1;
+	reset_transform[3][3] = 1;
+
+	m_tarnsform = reset_transform;
+	for (unsigned int m = 0; m < models.size(); m++)
+		models[m].obj_coord_trans = reset_transform;
+	
+	RenderScene();
+}
 
 
+// OBJ/CAMERA VIEW TOGGLE //////////////////////////////////
+
+void CCGWorkView::OnActionToggleView()
+{
+	m_object_space_trans = !m_object_space_trans;
+}
+
+
+
+void CCGWorkView::OnUpdateActionToggleView(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(m_object_space_trans);
+}
 
 // AXIS HANDLERS ///////////////////////////////////////////
 
@@ -729,11 +789,15 @@ void CCGWorkView::OnUpdateAxisZ(CCmdUI* pCmdUI)
 
 void CCGWorkView::OnWriteframeColor()
 {
-	// TODO: Add your control notification handler code here
 	CColorDialog colorDlg;
 	if (colorDlg.DoModal() == IDOK) {
 		color_wireframe = colorDlg.GetColor();
 	}
+
+	for (unsigned int m = 0; m < models.size(); m++){
+		models[m].color = color_wireframe;
+	}
+	Invalidate();
 }
 
 
