@@ -4,6 +4,7 @@
 #include "vec4.h"
 #include "mat4.h"
 #include "line.h"
+#include <Windows.h>
 
 class model
 {
@@ -20,6 +21,8 @@ public:
 
 	vec4 min_vec;
 	vec4 max_vec;
+
+	COLORREF color;
 };
 
 
