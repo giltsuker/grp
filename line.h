@@ -8,7 +8,11 @@ public:
 	~line();
 	vec4 p_a;
 	vec4 p_b;
+	bool operator==(const line &r) const;
+	bool on_screen;
+
+	int draw_count;
 };
 
-bool operator==(line l, line r);
+
 

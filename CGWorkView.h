@@ -53,7 +53,7 @@ private:
 	
 
 	// our functions
-	void DrawLine(COLORREF *arr, vec4 p1, vec4 p2, int width, int height, COLORREF color);
+	void DrawLine(COLORREF *arr, vec4 &p1, vec4 &p2, COLORREF color);
 	COLORREF color_wireframe;
 
 	LightParams m_lights[MAX_LIGHT];	//configurable lights array
@@ -71,6 +71,7 @@ private:
 	//}}AFX_VIRTUAL
 
 // Implementation
+
 public:
 	virtual ~CCGWorkView();
 #ifdef _DEBUG
@@ -83,9 +84,12 @@ protected:
 	BOOL SetupViewingFrustum(void);
 	BOOL SetupViewingOrthoConstAspect(void);
 	bool InRange(int x, int y, int width, int height);
-	virtual void RenderScene(COLORREF *screen, int width, int height, CDC* pDC);
+	virtual void RenderScene();
+	virtual LRESULT OnMouseMovement(WPARAM wparam, LPARAM lparam);
 
-
+	mat4	m_tarnsform;
+	int m_mouse_xpos;
+	int m_mouse_ypos;
 	HGLRC    m_hRC;			// holds the Rendering Context
 	CDC*     m_pDC;			// holds the Device Context
 	int m_WindowWidth;		// hold the windows width
@@ -136,3 +140,4 @@ inline CCGWorkDoc* CCGWorkView::GetDocument()
 // Microsoft Visual C++ will insert additional declarations immediately before the previous line.
 
 #endif // !defined(AFX_CGWORKVIEW_H__5857316D_EA60_11D5_9FD5_00D0B718E2CD__INCLUDED_)
+

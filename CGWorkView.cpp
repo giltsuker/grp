@@ -7,6 +7,7 @@
 #include "CGWorkView.h"
 
 #include <iostream>
+#include <functional>
 using std::cout;
 using std::endl;
 #include "MaterialDlg.h"
@@ -21,14 +22,26 @@ static char THIS_FILE[] = __FILE__;
 #include "PngWrapper.h"
 #include "iritSkel.h"
 #include "mat4.h"
-
+#include <math.h>
+#include "line.h"
+#include <unordered_map>
 // For Status Bar access
 #include "MainFrm.h"
+
+
 
 // Use this macro to display text messages in the status bar.
 #define STATUS_BAR_TEXT(str) (((CMainFrame*)GetParentFrame())->getStatusBar().SetWindowText(str))
 
+#define IN_RANGE(x, y) ((1 <= x) && (x < (m_WindowHeight - 1)) && (1 <= y) && (y < (m_WindowWidth - 1)))
 
+mat4 screen_space_trans;
+
+mat4 spin_trans;
+mat4 scale_trans;
+mat4 translate_trans;
+
+int mouse_message_cnt = 0;
 /////////////////////////////////////////////////////////////////////////////
 // CCGWorkView
 
@@ -40,6 +53,7 @@ BEGIN_MESSAGE_MAP(CCGWorkView, CView)
 	ON_WM_CREATE()
 	ON_WM_DESTROY()
 	ON_WM_SIZE()
+	ON_MESSAGE(WM_MOUSEMOVE, OnMouseMovement)
 	ON_COMMAND(ID_FILE_LOAD, OnFileLoad)
 	ON_COMMAND(ID_WIREFRAME_COLOUR, OnWriteframeColor)
 	ON_COMMAND(ID_VIEW_ORTHOGRAPHIC, OnViewOrthographic)
@@ -85,6 +99,15 @@ CCGWorkView::CCGWorkView()
 	m_nAction = ID_ACTION_ROTATE;
 	m_nView = ID_VIEW_ORTHOGRAPHIC;	
 	m_bIsPerspective = false;
+	m_tarnsform[0][0] = 1;
+	m_tarnsform[1][1] = 1;
+	m_tarnsform[2][2] = 1;
+	m_tarnsform[3][3] = 1;
+
+	spin_trans[0][0] = 1;
+	spin_trans[1][1] = 1;
+	spin_trans[2][2] = 1;
+	spin_trans[3][3] = 1;
 
 	color_wireframe = RGB(255, 255, 255);
 
@@ -230,19 +253,29 @@ void CCGWorkView::OnDraw(CDC* pDC)
 	CCGWorkDoc* pDoc = GetDocument();
 	ASSERT_VALID(pDoc);
 
-	CRect rc;
-	GetClientRect(&rc);
-
-	int width = rc.right;
-	int height = rc.bottom;
+	mat4 screen_space_scale;
+	mat4 screen_space_translate;
 
 
-	COLORREF *arr = (COLORREF*)calloc(width * height, sizeof(COLORREF));
-	// convert view space to screen space here and place in bitmap
+	int min_axis = min(m_WindowHeight, m_WindowWidth);
 
-	RenderScene(arr, width, height, pDC);
+	screen_space_scale[0][0] = (double)min_axis*0.6;
+	screen_space_scale[1][1] = (double)min_axis*0.6;
+	screen_space_scale[2][2] = (double)min_axis*0.6;
+	screen_space_scale[3][3] = 1;
 
-	delete arr;
+	screen_space_translate[0][0] = 1;
+	screen_space_translate[3][0] = 0.5 * m_WindowHeight;
+
+	screen_space_translate[1][1] = 1;
+	screen_space_translate[3][1] = 0.5 * m_WindowWidth;
+
+	screen_space_translate[2][2] = 1;
+	screen_space_translate[3][3] = 1;
+
+	screen_space_trans = screen_space_scale * screen_space_translate;
+
+	RenderScene();
 
 	if (!pDoc)
 	    return;
@@ -267,12 +300,123 @@ void CCGWorkView::OnDestroy()
 /////////////////////////////////////////////////////////////////////////////
 // User Defined Functions
 bool CCGWorkView::InRange(int x, int y, int width, int height){
-	return (0 <= x && x <= height && 0 <= y && y < width);
+	return (0 <= x && x < height && 0 <= y && y < width);
 };
 
-void CCGWorkView::DrawLine(COLORREF *arr, vec4 p1, vec4 p2, int width, int height, COLORREF color){
+LRESULT CCGWorkView::OnMouseMovement(WPARAM wparam, LPARAM lparam){
+	int xPos = GET_X_LPARAM(lparam);
+	int yPos = GET_Y_LPARAM(lparam);
+
+	if (wparam == MK_LBUTTON)
+	{
+		mat4 temp_transform;
+
+		// x mouse movement params
+		int diff_x = xPos - m_mouse_xpos;
+
+		double teta_x = 20*asin((double)diff_x / m_WindowWidth);
+
+		double sinx = sin(teta_x);
+		
+		double cosx = cos(teta_x); // sin(x) ~= x movements are very small
+
+		// x mouse movement params
+		int diff_y = yPos - m_mouse_ypos;
+		
+		double teta_y = asin((double)diff_y / m_WindowHeight);  //TODO scales...
+		double siny = sin(teta_y);
+		
+		double cosy = cos(teta_y); // sin(y) ~= y movements are very small
+
+		if (m_nAction == ID_ACTION_ROTATE){
+			if (m_nAxis == ID_AXIS_X){
+				temp_transform[0][0] = 1;
+
+				temp_transform[1][1] = cosx;
+				temp_transform[1][2] = sinx;
+
+				temp_transform[2][1] = -sinx;
+				temp_transform[2][2] = cosx;
+
+				temp_transform[3][3] = 1;
+
+			}
+			if (m_nAxis == ID_AXIS_Y){
+				temp_transform[0][0] = cosy;
+				temp_transform[0][2] = siny;
+
+				temp_transform[1][1] = 1;
+
+				temp_transform[2][0] = -siny;
+				temp_transform[2][2] = cosy;
+
+				temp_transform[3][3] = 1;
+			}
+			if (m_nAxis == ID_AXIS_Z){
+				temp_transform[0][0] = cosx;
+				temp_transform[0][1] = sinx;
+
+				temp_transform[1][0] = -sinx;
+				temp_transform[1][1] = cosx;
+
+				temp_transform[2][2] = 1;
+
+				temp_transform[3][3] = 1;
+			}
+		}
+		else if (m_nAction == ID_ACTION_TRANSLATE){
+			if (m_nAxis == ID_AXIS_X){
+				temp_transform[0][0] = 1;
+				temp_transform[3][0] = (double)diff_x / m_WindowWidth;
+
+				temp_transform[1][1] = 1;
+
+				temp_transform[2][2] = 1;
+
+				temp_transform[3][3] = 1;
+			}
+			if (m_nAxis == ID_AXIS_Y){
+				temp_transform[0][0] = 1;
+
+				temp_transform[1][1] = 1;
+				temp_transform[3][1] = (double)diff_y / m_WindowHeight;
+
+				temp_transform[2][2] = 1;
+
+				temp_transform[3][3] = 1;
+			}
+			if (m_nAxis == ID_AXIS_Z){
+				temp_transform[0][0] = 1;
+
+				temp_transform[1][1] = 1;
+
+				temp_transform[2][2] = 1;
+				temp_transform[3][2] = (double)diff_x / m_WindowWidth;
+
+				temp_transform[3][3] = 1;
+			}
+		}
+		else if (m_nAction == ID_ACTION_SCALE){
+			int x = 1;
+		}
+		//switch ()
+
+		spin_trans = temp_transform;
+		//inv_spin_trans = inv_temp_transform;
+
+		m_tarnsform = m_tarnsform * temp_transform;
+		RenderScene();
+	}
+	m_mouse_xpos = xPos;
+	m_mouse_ypos = yPos;
+
+	mouse_message_cnt++;
+
+	return 0;
+};
+
+void CCGWorkView::DrawLine(COLORREF *arr, vec4 &p1, vec4 &p2, COLORREF color){
 	// TODO:
-	// z plane clipping
 	// use default line color
 
 	// algorithm vars
@@ -313,14 +457,16 @@ void CCGWorkView::DrawLine(COLORREF *arr, vec4 p1, vec4 p2, int width, int heigh
 	south_east_er = 2 * dx + 2 * dy;
 		
 
-	if (InRange(x, y, width, height)) arr[y + width * x] = color;
+	if (IN_RANGE(x, y))
+		arr[y + m_WindowWidth * x] = color;
 	// select the correct midpoint algorithm (direction and incline)
 	if (dx == 0){ // horizontal y line or line in z direction only
 		//move in positive y direction only
 			
 		while (y < y2){
 			y = y + 1;	
-			if (InRange(x, y, width, height)) arr[y + width * x] = color;
+			if (IN_RANGE(x, y))
+				arr[y + m_WindowWidth * x] = color;
 		}
 		return;
 	}
@@ -339,7 +485,8 @@ void CCGWorkView::DrawLine(COLORREF *arr, vec4 p1, vec4 p2, int width, int heigh
 				x = x + 1;
 				y = y + 1;
 			}
-			if (InRange(x, y, width, height)) arr[y + width * x] = color;
+			if (IN_RANGE(x, y))
+				arr[y + m_WindowWidth * x] = color;
 		}
 	}
 	else if (0 < incline && incline <= 1)
@@ -355,7 +502,8 @@ void CCGWorkView::DrawLine(COLORREF *arr, vec4 p1, vec4 p2, int width, int heigh
 				x = x + 1;
 				y = y + 1;
 			}
-			if (InRange(x, y, width, height)) arr[y + width * x] = color;
+			if (IN_RANGE(x, y))
+				arr[y + m_WindowWidth * x] = color;
 		}
 	}
 	else if (-1 < incline && incline <= 0){
@@ -370,7 +518,8 @@ void CCGWorkView::DrawLine(COLORREF *arr, vec4 p1, vec4 p2, int width, int heigh
 				x = x + 1;
 				y = y - 1;
 			}
-			if (InRange(x, y, width, height)) arr[y + width * x] = color;
+			if (IN_RANGE(x, y))
+				arr[y + m_WindowWidth * x] = color;
 		}
 	}
 	else if (incline <= -1){ // condition unneccessary, exists to make conditions clear
@@ -385,75 +534,57 @@ void CCGWorkView::DrawLine(COLORREF *arr, vec4 p1, vec4 p2, int width, int heigh
 				x = x + 1;
 				y = y - 1;
 			}
-			if (InRange(x, y, width, height)) arr[y + width * x] = color;
+			if (IN_RANGE(x, y))
+				arr[y + m_WindowWidth * x] = color;
 		}
 	}
 
 	return;
 }
 
-void CCGWorkView::RenderScene(COLORREF *screen, int width, int height, CDC* pDC) {
+void CCGWorkView::RenderScene() {
 	
-	mat4 screen_space_scale;
-	mat4 screen_space_translate;
-	
-	mat4 screen_space_trans;
-
-	int min_axis = min(height, width);
-
-	screen_space_scale[0][0] = (double)min_axis*0.8;
-	screen_space_scale[1][1] = (double)min_axis*0.8;
-	screen_space_scale[2][2] = (double)min_axis*0.8;
-	screen_space_scale[3][3] = 1;
-
-	screen_space_translate[0][0] = 1;
-	screen_space_translate[3][0] = 0.5 * height;
-
-	screen_space_translate[1][1] = 1;
-	screen_space_translate[3][1] = 0.5 * width;
-
-	screen_space_translate[2][2] = 1;
-	screen_space_translate[3][3] = 1;
+	COLORREF *screen = (COLORREF*)calloc(m_WindowWidth * m_WindowHeight, sizeof(COLORREF));
 
 	vec4 p1, p2;
+	line cur_line;
 	polygon cur_polygon;
-
-	screen_space_trans = screen_space_scale * screen_space_translate;
-	for (unsigned int m = 0; m < models.size(); m++)
-		for (unsigned int p = 0; p < models[m].polygons.size(); p++)
-		{
-			cur_polygon = models[m].polygons[p];
-			for (unsigned int p = 0; p < cur_polygon.points.size(); p++){
-				p1 = cur_polygon.points[p] * models[m].view_space_trans * screen_space_trans;
-				p2 = cur_polygon.points[(p + 1) % cur_polygon.points.size()] * models[m].view_space_trans * screen_space_trans;
-				DrawLine(screen, p1, p2, width, height, color_wireframe);
-			}
+	mat4 cur_transform;
+	for (unsigned int m = 0; m < models.size(); m++){
+		models[m].obj_coord_trans = spin_trans * models[m].obj_coord_trans;
+		
+		cur_transform = models[m].obj_coord_trans * models[m].view_space_trans * screen_space_trans;
+		for (unsigned int pnt = 0; pnt < models[m].points_list.size(); pnt++){
+			p1 = models[m].points_list[pnt].p_a * cur_transform;
+			p2 = models[m].points_list[pnt].p_b * cur_transform;
+			DrawLine(screen, p1, p2, color_wireframe);
 		}
+	}
 
 	// Creating temp bitmap
-	HBITMAP map = CreateBitmap(width,		 // width
-		height,		 // height
+	HBITMAP map = CreateBitmap(m_WindowWidth,		 // width
+		m_WindowHeight,		 // height
 		1,			 // Color Planes, unfortanutelly don't know what is it actually. Let it be 1
 		8 * 4,		 // Size of memory for one pixel in bits (in win32 4 bytes = 4*8 bits)
 		(void*)screen); // pointer to array
 	// Temp HDC to copy picture
 
-	HDC src = CreateCompatibleDC(pDC->GetSafeHdc()); // hdc - Device context for window
+	HDC src = CreateCompatibleDC(m_pDC->GetSafeHdc()); // hdc - Device context for window
 	SelectObject(src, map); // Inserting picture into our temp HDC
 
 	// Copy image from temp HDC to window
-	BitBlt(pDC->GetSafeHdc(), // Destination
+	BitBlt(m_pDC->GetSafeHdc(), // Destination
 		0,  // x and
 		0,  // y - upper-left corner of place, where we'd like to copy
-		width, // width of the region
-		height, // height
+		m_WindowWidth, // width of the region
+		m_WindowHeight, // height
 		src, // source
 		0,   // x and
 		0,   // y of upper left corner  of part of the source, from where we'd like to copy
 		SRCCOPY); // Defined DWORD to juct copy pixels. Watch more on msdn;
 
 	DeleteDC(src);
-
+	delete screen;
 	return;
 }
 

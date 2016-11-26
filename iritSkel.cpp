@@ -1,5 +1,8 @@
 #include "stdafx.h"
 #include "iritSkel.h"
+#include "line.h"
+#include <functional>
+#include <unordered_map>
 /*****************************************************************************
 * Skeleton for an interface to a parser to read IRIT data files.			 *
 ******************************************************************************
@@ -10,6 +13,22 @@
 ******************************************************************************/
 std::vector<model> models;
 int model_cnt;
+
+// line class hash
+namespace std
+{
+	template < >
+	struct hash<line>
+	{
+		size_t operator()(const line& p) const
+		{
+			// Compute individual hash values for two data members and combine them using XOR and bit shifting
+			return (hash<double>()(p.p_a.x + p.p_a.y) + hash<double>()(p.p_b.x + p.p_b.y));
+		}
+	};
+}
+std::unordered_map<line, int> lines;
+
 
 IPFreeformConvStateStruct CGSkelFFCState = {
 	FALSE,          /* Talkative */
@@ -50,6 +69,8 @@ bool CGSkelProcessIritDataFiles(CString &FileNames, int NumFiles)
 	IPObjectStruct *PObjects;
 	model_cnt = 0;
 	IrtHmgnMatType CrntViewMat;
+
+	lines.clear();
 
 	/* Get the data files: */
 	IPSetFlattenObjects(FALSE);
@@ -206,6 +227,8 @@ bool CGSkelStoreData(IPObjectStruct *PObj)
 		}
 	}
 	int poly_cnt = 0;
+	line cur_line;
+
 	for (PPolygon = PObj -> U.Pl; PPolygon != NULL;	PPolygon = PPolygon -> Pnext) 
 	{
 			if (PPolygon -> PVertex == NULL) {
@@ -215,6 +238,7 @@ bool CGSkelStoreData(IPObjectStruct *PObj)
 			
 			polygon cur_polygon;
 			vec4 temp_vert;
+			vec4 prev_temp_vert;
 			models.back().polygons.push_back(cur_polygon); // create an additional empty polygon
 
 			/* Count number of vertices. */
@@ -246,11 +270,19 @@ bool CGSkelStoreData(IPObjectStruct *PObj)
 				if (temp_vert.x > max_vec.x || models.back().polygons.front().points.size() == 0) max_vec.x = temp_vert.x;
 				if (temp_vert.y > max_vec.y || models.back().polygons.front().points.size() == 0) max_vec.y = temp_vert.y;
 				if (temp_vert.z > max_vec.z || models.back().polygons.front().points.size() == 0) max_vec.z = temp_vert.z;
+				
+				//if (models.back().polygons.back().points.size() != 0){
+				//	cur_line = line(prev_temp_vert, temp_vert);
+				//	if (lines[cur_line] == 0){
+				//		models.back().points_list.push_back(cur_line);
+				//		lines[cur_line]++;
+				//	}
+				//}
+				//else
 
 				models.back().polygons[poly_cnt].points.push_back(temp_vert); // create an additional vertex
-				
-				//vertexes.push_back(temp_vert);
 
+				prev_temp_vert = temp_vert;
 				PVertex = PVertex -> Pnext;
 			}
 			while (PVertex != PPolygon -> PVertex && PVertex != NULL);
@@ -258,6 +290,21 @@ bool CGSkelStoreData(IPObjectStruct *PObj)
 
 
 			poly_cnt++;
+	}
+
+	vec4 p1, p2;
+
+	for (unsigned int p = 0; p < models.back().polygons.size(); p++){
+		for (unsigned int pnt = 0; pnt < models.back().polygons[p].points.size(); pnt++){
+			
+			p1 = models.back().polygons[p].points[(pnt) % models.back().polygons[p].points.size()];
+			p2 = models.back().polygons[p].points[(pnt + 1) % models.back().polygons[p].points.size()];
+			cur_line = line(p1, p2);
+			if (lines[cur_line] == 0){
+				models.back().points_list.push_back(cur_line);
+				lines[cur_line]++;
+			}
+		}
 	}
 
 	models.back().max_vec = max_vec;

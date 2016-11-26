@@ -8,6 +8,7 @@ public:
 	polygon();
 	~polygon();
 	std::vector<vec4> points;
-
+	
+	bool operator==(const polygon &another_polygon) const;
 };
 

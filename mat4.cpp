@@ -29,6 +29,16 @@ vec4 operator*(mat4 lhs, vec4 rhs){
 	return res;
 };
 
+mat4 transpose(mat4 &rhs){
+	mat4 res;
+
+	for (int i = 0; i < 4; i++)
+		for (int j = 0; j < 4; j++){
+			res[i][j] = rhs[j][i];
+		}
+
+	return res;
+};
 
 mat4 operator*(mat4 lhs, mat4 rhs){
 	mat4 res;

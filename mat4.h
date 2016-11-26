@@ -8,8 +8,11 @@ public:
 	~mat4();
 	
 	std::vector<vec4> rows;
+
 	vec4& operator[](int indx);
 };
+
+mat4 transpose(mat4 &rhs);
 
 vec4 operator*(mat4 lhs, vec4 rhs);
 
