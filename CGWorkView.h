@@ -54,7 +54,10 @@ private:
 
 	// our functions
 	void DrawLine(COLORREF *arr, vec4 &p1, vec4 &p2, COLORREF color);
-	COLORREF color_wireframe;
+	void DrawBoundBox(COLORREF *arr, model &m, COLORREF color);
+	COLORREF m_color_wireframe;
+	COLORREF m_background_color;
+	COLORREF m_boundbox_color;
 
 	LightParams m_lights[MAX_LIGHT];	//configurable lights array
 	LightParams m_ambientLight;		//ambient light (only RGB is used)
@@ -92,6 +95,7 @@ protected:
 	int m_mouse_xpos;
 	int m_mouse_ypos;
 	bool m_object_space_trans;
+	bool m_bound_box;
 	HGLRC    m_hRC;			// holds the Rendering Context
 	HDC		 m_hDC;
 	CDC*     m_pDC;			// holds the Device Context
@@ -126,6 +130,10 @@ protected:
 	afx_msg void OnUpdateAxisY(CCmdUI* pCmdUI);
 	afx_msg void OnAxisZ();
 	afx_msg void OnUpdateAxisZ(CCmdUI* pCmdUI);
+	afx_msg void OnAxisXY();
+	afx_msg void OnUpdateAxisXY(CCmdUI* pCmdUI);
+	afx_msg void OnBoundBox();
+	afx_msg void OnUpdateBoundBox(CCmdUI* pCmdUI);
 	afx_msg void OnLightShadingFlat();
 	afx_msg void OnUpdateLightShadingFlat(CCmdUI* pCmdUI);
 	afx_msg void OnLightShadingGouraud();

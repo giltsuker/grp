@@ -57,6 +57,8 @@ BEGIN
     BUTTON      ID_AXIS_Z
     BUTTON      ID_WIREFRAME_COLOUR
     BUTTON      ID_BUTTON_TRANS_TOGGLE
+    BUTTON      ID_AXIS_XY
+    BUTTON      ID_BOUNDBOX
 END
 
 
@@ -92,6 +94,7 @@ BEGIN
         MENUITEM "&X",                          ID_AXIS_X
         MENUITEM "&Y",                          ID_AXIS_Y
         MENUITEM "&Z",                          ID_AXIS_Z
+        MENUITEM "XY",                          ID_AXIS_XY
     END
     POPUP "&Options"
     BEGIN
@@ -238,6 +241,19 @@ BEGIN
     EDITTEXT        IDC_EDIT_MOUSESESNSETIVE,84,12,96,14,ES_AUTOHSCROLL
 END
 
+IDD_COLOR_DLG DIALOGEX 0, 0, 309, 177
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Dialog"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,198,156,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,252,156,50,14
+    PUSHBUTTON      "Wireframe",IDC_BUTTON1,12,42,50,14
+    PUSHBUTTON      "Background",IDC_BUTTON2,132,42,50,14
+    PUSHBUTTON      "Boundbox",IDC_BUTTON3,246,42,50,14
+    LTEXT           "Color Selection",IDC_STATIC,132,11,48,8
+END
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -315,6 +331,14 @@ BEGIN
         RIGHTMARGIN, 230
         TOPMARGIN, 7
         BOTTOMMARGIN, 50
+    END
+
+    IDD_COLOR_DLG, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 302
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 170
     END
 END
 #endif    // APSTUDIO_INVOKED

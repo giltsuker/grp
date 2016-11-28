@@ -23,6 +23,7 @@ static char THIS_FILE[] = __FILE__;
 #include "iritSkel.h"
 #include "MouseSensetiveDialog.h"
 #include "mat4.h"
+#include "ColorSelectionDialog.h"
 #include <math.h>
 #include "line.h"
 #include <unordered_map>
@@ -68,6 +69,10 @@ BEGIN_MESSAGE_MAP(CCGWorkView, CView)
 	ON_UPDATE_COMMAND_UI(ID_AXIS_Y, OnUpdateAxisY)
 	ON_COMMAND(ID_AXIS_Z, OnAxisZ)
 	ON_UPDATE_COMMAND_UI(ID_AXIS_Z, OnUpdateAxisZ)
+	ON_COMMAND(ID_AXIS_XY, OnAxisXY)
+	ON_UPDATE_COMMAND_UI(ID_AXIS_XY, OnUpdateAxisXY)
+	ON_COMMAND(ID_BOUNDBOX, OnBoundBox)
+	ON_UPDATE_COMMAND_UI(ID_BOUNDBOX, OnUpdateBoundBox)
 	ON_COMMAND(ID_LIGHT_SHADING_FLAT, OnLightShadingFlat)
 	ON_UPDATE_COMMAND_UI(ID_LIGHT_SHADING_FLAT, OnUpdateLightShadingFlat)
 	ON_COMMAND(ID_LIGHT_SHADING_GOURAUD, OnLightShadingGouraud)
@@ -100,6 +105,7 @@ CCGWorkView::CCGWorkView()
 	m_screen = NULL;
 
 	m_object_space_trans = false;
+	m_bound_box = false;
 	m_mouse_sensetivity = 1;
 
 	m_bIsPerspective = false;
@@ -108,7 +114,9 @@ CCGWorkView::CCGWorkView()
 	m_tarnsform[2][2] = 1;
 	m_tarnsform[3][3] = 1;
 
-	color_wireframe = RGB(255, 255, 255);
+	m_color_wireframe = RGB(0, 0, 0);
+	m_background_color = RGB(255, 255, 255);
+	m_boundbox_color = RGB(0, 0, 0);
 
 	m_nLightShading = ID_LIGHT_SHADING_FLAT;
 
@@ -259,8 +267,9 @@ void CCGWorkView::OnDraw(CDC* pDC)
 	CCGWorkDoc* pDoc = GetDocument();
 	ASSERT_VALID(pDoc);
 
-	delete m_screen;
-	m_screen = (COLORREF*)calloc(m_WindowWidth * m_WindowHeight, sizeof(COLORREF));
+	//delete m_screen;
+	if (m_screen == NULL)
+		m_screen = (COLORREF*)calloc(m_WindowWidth * m_WindowHeight, sizeof(COLORREF));
 
 	mat4 screen_space_scale;
 	mat4 screen_space_translate;
@@ -326,10 +335,11 @@ LRESULT CCGWorkView::OnMouseMovement(WPARAM wparam, LPARAM lparam){
 	if (wparam == MK_LBUTTON && past_pressed)
 	{
 		mat4 temp_transform;
+		mat4 temp_transform_xy;
 
 		// x mouse movement params
 		double diff_x = m_mouse_sensetivity * (xPos - m_mouse_xpos);
-
+		
 		double teta_x = 10 * asin((double)diff_x / m_WindowWidth);
 
 		double sinx = sin(teta_x);
@@ -379,6 +389,29 @@ LRESULT CCGWorkView::OnMouseMovement(WPARAM wparam, LPARAM lparam){
 
 				temp_transform[3][3] = 1;
 			}
+			if (m_nAxis == ID_AXIS_XY){
+				temp_transform[0][0] = 1;
+
+				temp_transform[1][1] = cosx;
+				temp_transform[1][2] = sinx;
+
+				temp_transform[2][1] = -sinx;
+				temp_transform[2][2] = cosx;
+
+				temp_transform[3][3] = 1;
+
+				temp_transform_xy[0][0] = cosy;
+				temp_transform_xy[0][2] = siny;
+
+				temp_transform_xy[1][1] = 1;
+
+				temp_transform_xy[2][0] = -siny;
+				temp_transform_xy[2][2] = cosy;
+
+				temp_transform_xy[3][3] = 1;
+
+				temp_transform = temp_transform_xy * temp_transform;
+			}
 		}
 		else if (m_nAction == ID_ACTION_TRANSLATE){
 			if (m_nAxis == ID_AXIS_X){
@@ -411,11 +444,65 @@ LRESULT CCGWorkView::OnMouseMovement(WPARAM wparam, LPARAM lparam){
 
 				temp_transform[3][3] = 1;
 			}
+			if (m_nAxis == ID_AXIS_XY){
+				temp_transform[0][0] = 1;
+				temp_transform[3][0] = (double)diff_x / m_WindowWidth;
+
+				temp_transform[1][1] = 1;
+				temp_transform[3][1] = (double)diff_y / m_WindowHeight;
+
+				temp_transform[2][2] = 1;
+
+				temp_transform[3][3] = 1;
+			}
 		}
 		else if (m_nAction == ID_ACTION_SCALE){
-			int x = 1;
-		}
+			if (m_nAxis == ID_AXIS_X){
+				temp_transform[0][0] = 1 + (double)diff_x / m_WindowWidth;
 
+				temp_transform[1][1] = 1;
+
+				temp_transform[2][2] = 1;
+
+				temp_transform[3][3] = 1;
+			}
+			if (m_nAxis == ID_AXIS_Y){
+				temp_transform[0][0] = 1;
+
+				temp_transform[1][1] = 1 + (double)diff_y / m_WindowHeight;
+
+				temp_transform[2][2] = 1;
+
+				temp_transform[3][3] = 1;
+			}
+			if (m_nAxis == ID_AXIS_Z){
+				temp_transform[0][0] = 1;
+
+				temp_transform[1][1] = 1;
+
+				temp_transform[2][2] = 1 + (double)diff_x / m_WindowWidth;
+
+				temp_transform[3][3] = 1;
+			}
+			if (m_nAxis == ID_AXIS_XY){
+				temp_transform[0][0] = 1 + (double)diff_x / m_WindowWidth;
+
+				temp_transform[1][1] = 1 + (double)diff_y / m_WindowHeight;
+
+				temp_transform[2][2] = 1;
+
+				temp_transform[3][3] = 1;
+			}
+		}
+		else {
+			temp_transform[0][0] = 1;
+
+			temp_transform[1][1] = 1;
+
+			temp_transform[2][2] = 1;
+
+			temp_transform[3][3] = 1;
+		}
 		m_tarnsform = temp_transform;
 
 		for (unsigned int m = 0; m < models.size(); m++){
@@ -569,9 +656,51 @@ void CCGWorkView::DrawLine(COLORREF *arr, vec4 &p1, vec4 &p2, COLORREF color){
 	return;
 }
 
+void CCGWorkView::DrawBoundBox(COLORREF *arr, model &model, COLORREF color){
+
+	mat4 cur_transform = model.obj_coord_trans * model.view_space_trans * m_screen_space_trans;
+
+	double minx = model.min_vec.x;
+	double miny = model.min_vec.y;
+	double minz = model.min_vec.z;
+
+	double maxx = model.max_vec.x;
+	double maxy = model.max_vec.y;
+	double maxz = model.max_vec.z;
+
+	vec4 xmin_ymin_zmin(minx, miny, minz, 1.0);
+	vec4 xmin_ymin_zmax(minx, miny, maxz, 1.0);
+
+	vec4 xmin_ymax_zmin(minx, maxy, minz, 1.0);
+	vec4 xmin_ymax_zmax(minx, maxy, maxz, 1.0);
+
+	vec4 xmax_ymin_zmin(maxx, miny, minz, 1.0);
+	vec4 xmax_ymin_zmax(maxx, miny, maxz, 1.0);
+
+	vec4 xmax_ymax_zmin(maxx, maxy, minz, 1.0);
+	vec4 xmax_ymax_zmax(maxx, maxy, maxz, 1.0);
+
+	// zmin rectangle first
+	DrawLine(arr, xmin_ymin_zmin * cur_transform, xmin_ymax_zmin * cur_transform, color);
+	DrawLine(arr, xmin_ymax_zmin * cur_transform, xmax_ymax_zmin * cur_transform, color);
+	DrawLine(arr, xmax_ymax_zmin * cur_transform, xmax_ymin_zmin * cur_transform, color);
+	DrawLine(arr, xmax_ymin_zmin * cur_transform, xmin_ymin_zmin * cur_transform, color);
+
+	// zmax rectangle second
+	DrawLine(arr, xmin_ymin_zmax * cur_transform, xmin_ymax_zmax * cur_transform, color);
+	DrawLine(arr, xmin_ymax_zmax * cur_transform, xmax_ymax_zmax * cur_transform, color);
+	DrawLine(arr, xmax_ymax_zmax * cur_transform, xmax_ymin_zmax * cur_transform, color);
+	DrawLine(arr, xmax_ymin_zmax * cur_transform, xmin_ymin_zmax * cur_transform, color);
+
+	// connect the two rectangles next
+	DrawLine(arr, xmin_ymin_zmin * cur_transform, xmin_ymin_zmax * cur_transform, color);
+	DrawLine(arr, xmin_ymax_zmin * cur_transform, xmin_ymax_zmax * cur_transform, color);
+	DrawLine(arr, xmax_ymin_zmin * cur_transform, xmax_ymin_zmax * cur_transform, color);
+	DrawLine(arr, xmax_ymax_zmin * cur_transform, xmax_ymax_zmax * cur_transform, color);
+}
+
 void CCGWorkView::RenderScene() {
 	
-	COLORREF m_background_color = RGB(255, 255, 255);
 	std::fill_n(m_screen, m_WindowWidth * m_WindowHeight, m_background_color); //TODO background color select
 	vec4 p1, p2;
 	line cur_line;
@@ -582,14 +711,17 @@ void CCGWorkView::RenderScene() {
 		for (unsigned int pnt = 0; pnt < models[m].points_list.size(); pnt++){
 			p1 = models[m].points_list[pnt].p_a * cur_transform;
 			p2 = models[m].points_list[pnt].p_b * cur_transform;
-			if (models[m].color == m_background_color)
-				DrawLine(m_screen, p1, p2, models[m].color ^ 0x00ffffff); //inverse the color of the object if it is the same as the screen
-			else
-				DrawLine(m_screen, p1, p2, models[m].color);
+			//if (models[m].color == m_background_color )
+			//	DrawLine(m_screen, p1, p2, models[m].color ^ 0x00ffffff); //inverse the color of the object if it is the same as the screen
+			//else
+			DrawLine(m_screen, p1, p2, models[m].color);
+		}
+		if (m_bound_box){
+			DrawBoundBox(m_screen, models[m], m_boundbox_color);
 		}
 	}
 
-	// Creating temp bitmap
+
 	m_map = CreateBitmap(m_WindowWidth,		 // width
 		m_WindowHeight,		 // height
 		1,			 // Color Planes, unfortanutelly don't know what is it actually. Let it be 1
@@ -667,14 +799,6 @@ void CCGWorkView::OnViewPerspective()
 void CCGWorkView::OnUpdateViewPerspective(CCmdUI* pCmdUI) 
 {
 	pCmdUI->SetCheck(m_nView == ID_VIEW_PERSPECTIVE);
-}
-
-
-void CCGWorkView::OnOptionMouseSensetivity(){
-	MouseSensetiveDialog dlg;
-	dlg.DoModal();
-
-	m_mouse_sensetivity = dlg.m_mouse_sensetivity;
 }
 
 // ACTION HANDLERS ///////////////////////////////////////////
@@ -781,7 +905,15 @@ void CCGWorkView::OnUpdateAxisZ(CCmdUI* pCmdUI)
 	pCmdUI->SetCheck(m_nAxis == ID_AXIS_Z);
 }
 
+void CCGWorkView::OnAxisXY()
+{
+	m_nAxis = ID_AXIS_XY;
+}
 
+void CCGWorkView::OnUpdateAxisXY(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(m_nAxis == ID_AXIS_XY);
+}
 
 
 
@@ -789,18 +921,38 @@ void CCGWorkView::OnUpdateAxisZ(CCmdUI* pCmdUI)
 
 void CCGWorkView::OnWriteframeColor()
 {
-	CColorDialog colorDlg;
-	if (colorDlg.DoModal() == IDOK) {
-		color_wireframe = colorDlg.GetColor();
-	}
+	ColorSelectionDialog dlg(m_color_wireframe, m_boundbox_color, m_background_color);
+	if (dlg.DoModal() == IDOK){
 
-	for (unsigned int m = 0; m < models.size(); m++){
-		models[m].color = color_wireframe;
+		m_color_wireframe = RGB(GetBValue(dlg.wireframe_color), GetGValue(dlg.wireframe_color), GetRValue(dlg.wireframe_color));
+		m_boundbox_color = RGB(GetBValue(dlg.boundbox_color), GetGValue(dlg.boundbox_color), GetRValue(dlg.boundbox_color));
+		m_background_color = RGB(GetBValue(dlg.background_color), GetGValue(dlg.background_color), GetRValue(dlg.background_color));
+
+		for (unsigned int m = 0; m < models.size(); m++){
+			models[m].color = m_color_wireframe;
+		}
+		Invalidate();
 	}
+}
+
+void CCGWorkView::OnBoundBox()
+{
+	m_bound_box = !m_bound_box;
 	Invalidate();
 }
 
+void CCGWorkView::OnUpdateBoundBox(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(m_bound_box);
+}
 
+
+void CCGWorkView::OnOptionMouseSensetivity(){
+	MouseSensetiveDialog dlg;
+	dlg.DoModal();
+
+	m_mouse_sensetivity = dlg.m_mouse_sensetivity;
+}
 
 // LIGHT SHADING HANDLERS ///////////////////////////////////////////
 

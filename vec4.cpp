@@ -9,6 +9,13 @@ vec4::vec4()
 	p = 0.0;
 }
 
+vec4::vec4(double _x, double _y, double _z, double _p)
+{
+	x = _x;
+	y = _y;
+	z = _z;
+	p = _p;
+}
 
 vec4::~vec4()
 {
